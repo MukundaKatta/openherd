@@ -86,6 +86,3 @@ src/
 └── lib/                  # Utilities and helpers
 ```
 
-## License
-
-MIT
