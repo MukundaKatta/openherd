@@ -1,0 +1,73 @@
+version: "3.8"
+
+services:
+  openherd:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_SUPABASE_URL=http://supabase-kong:8000
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - NEXT_PUBLIC_APP_URL=http://localhost:3000
+    depends_on:
+      - ollama
+    networks:
+      - openherd-network
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - openherd-network
+    restart: unless-stopped
+
+  supabase-db:
+    image: supabase/postgres:15.1.1.41
+    ports:
+      - "54322:5432"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: openherd
+    volumes:
+      - supabase-db-data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - openherd-network
+    restart: unless-stopped
+
+  supabase-kong:
+    image: kong:2.8.1
+    ports:
+      - "8000:8000"
+      - "8443:8443"
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl
+    networks:
+      - openherd-network
+    restart: unless-stopped
+
+volumes:
+  ollama-data:
+  supabase-db-data:
+
+networks:
+  openherd-network:
+    driver: bridge
